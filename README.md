@@ -2,7 +2,7 @@
 
 A tiny always-on activity monitor for your Pharo image. It **keeps updating even when the UI thread is frozen**, and tells you which method is looping and which classes are being created in bulk.
 
-<video controls src="docs/video.mov" title="Title"></video>
+<img src="docs/demo.gif" width="480" alt="Live Monitor panel updating while the UI is frozen">
 
 ## Install
 
