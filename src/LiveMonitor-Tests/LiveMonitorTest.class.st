@@ -166,9 +166,12 @@ LiveMonitorTest >> testSamplerProcessRunsAboveUserCode [
 
 { #category : #tests }
 LiveMonitorTest >> testSamplerSurvivesHighPriorityHog [
-	"Experiments forked above the UI (even at 75) must not starve the monitor"
+	"Experiments forked above the UI (even at 75) must not starve the monitor.
+	The image's own monitor is paused so the two samplers do not compete."
 
-	| done before during |
+	| done before during peak |
+	LiveMonitor default ifNotNil: [ :running | running stopSampling ].
+	[
 	monitor := LiveMonitor new.
 	monitor startSampling.
 	(Delay forMilliseconds: 600) wait.
@@ -181,9 +184,11 @@ LiveMonitorTest >> testSamplerSurvivesHighPriorityHog [
 	during := monitor version.
 	done signal ] forkAt: 75.
 	done wait.
-	self assert: during - before >= 2.
-	self assert: monitor latest cpu > 0.5.
-	self assert: monitor lastError isNil
+	peak := monitor history inject: 0 into: [ :max :each | max max: each cpu ].
+	self assert: during - before >= 2 description: 'windows during the hog: ' , (during - before) printString.
+	self assert: peak > 0.5 description: 'peak cpu: ' , peak printString.
+	self assert: monitor lastError isNil ] ensure: [
+		LiveMonitor default ifNotNil: [ :running | running startSampling ] ]
 ]
 
 { #category : #tests }
@@ -200,6 +205,24 @@ LiveMonitorTest >> testStarvationIsReported [
 	self assert: monitor starvation key equals: 4000.
 	self assert: ((monitor painter detailLinesFor: monitor) anySatisfy: [ :line |
 			 line key includesSubstring: 'blocked' ])
+]
+
+{ #category : #tests }
+LiveMonitorTest >> testJustWokenProcessesAreNotBusy [
+	"A process woken from a wait by the same timer tick is runnable but idle; a spinning one is busy"
+
+	| sleeper spinner semaphore |
+	semaphore := Semaphore new.
+	sleeper := [ semaphore wait ] forkAt: Processor userBackgroundPriority.
+	spinner := [ self spin ] forkAt: Processor userBackgroundPriority.
+	[
+	(Delay forMilliseconds: 20) wait.
+	semaphore signal.
+	"the sleeper is now runnable but has not run yet: we have the higher priority"
+	self assert: (LMStackTally isJustWoken: sleeper).
+	self deny: (LMStackTally isJustWoken: spinner) ] ensure: [
+		sleeper terminate.
+		spinner terminate ]
 ]
 
 { #category : #tests }

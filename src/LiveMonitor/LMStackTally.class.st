@@ -8,6 +8,9 @@ I accumulate stack samples of processes to tell where they spend their time.
 Class {
 	#name : #LMStackTally,
 	#superclass : #Object,
+	#classVars : [
+		'WaitingMethods'
+	],
 	#instVars : [
 		'samples',
 		'inclusive',
@@ -18,6 +21,20 @@ Class {
 	],
 	#category : #LiveMonitor
 }
+
+{ #category : #testing }
+LMStackTally class >> isJustWoken: aProcess [
+	"A process that the same timer tick woke up from a wait (an event loop polling every few ms,
+	the UI pacing its frames) is runnable when we look, but it was not using the CPU.
+	Such a process is stopped right after a wait send: the code on top of its stack (the method,
+	or the block when it is a block, not its enclosing method) sends #wait or #wait..."
+
+	| code |
+	code := (aProcess suspendedContext ifNil: [ ^ true ]) compiledCode.
+	WaitingMethods ifNil: [ WaitingMethods := WeakIdentityKeyDictionary new ].
+	^ WaitingMethods at: code ifAbsentPut: [
+		  code messages anySatisfy: [ :selector | selector beginsWith: 'wait' ] ]
+]
 
 { #category : #printing }
 LMStackTally class >> labelFor: aCompiledMethod [

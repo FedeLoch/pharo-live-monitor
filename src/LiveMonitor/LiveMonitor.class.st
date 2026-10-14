@@ -404,13 +404,15 @@ LiveMonitor >> paintDirectlyAt: now [
 
 { #category : #painting }
 LiveMonitor >> present: aRectangle on: osRenderer [
-	"Push aRectangle to the screen now. Never wait for the renderer lock (whoever holds it may be
-	the frozen process): if it is taken, answer false and we try again on a later tick.
-	Also present when the UI process froze in the middle of a frame (deferred updates)."
+	"Push aRectangle (in pixels) to the screen now. Never wait for the renderer lock (whoever holds
+	it may be the frozen process): if it is taken, answer false and we try again on a later tick.
+	Also present when the UI process froze in the middle of a frame (deferred updates).
+	We use #updateAreas:immediate: like Morphic does: #updateRectangle: clips to the window size in
+	points, which drops everything below the top-left quarter on a HiDPI screen."
 
 	| mutex |
 	(osRenderer class allInstVarNames includesAll: #( 'mutex' 'deferUpdates' )) ifFalse: [
-		osRenderer updateRectangle: aRectangle.
+		osRenderer updateAreas: { aRectangle } immediate: true.
 		^ true ].
 	mutex := osRenderer instVarNamed: 'mutex'.
 	^ mutex
@@ -418,7 +420,7 @@ LiveMonitor >> present: aRectangle on: osRenderer [
 			  | deferred |
 			  deferred := osRenderer instVarNamed: 'deferUpdates'.
 			  osRenderer instVarNamed: 'deferUpdates' put: false.
-			  [ osRenderer updateRectangle: aRectangle ] ensure: [
+			  [ osRenderer updateAreas: { aRectangle } immediate: true ] ensure: [
 				  osRenderer instVarNamed: 'deferUpdates' put: deferred ].
 			  true ]
 		  ifLocked: [ false ]
@@ -501,7 +503,7 @@ LiveMonitor >> sampleProcesses [
 	| preempted ui |
 	windowTicks := windowTicks + 1.
 	preempted := Processor preemptedProcess.
-	(preempted isNil or: [ preempted priority <= Processor lowestPriority ]) ifFalse: [
+	(preempted isNil or: [ preempted priority <= Processor lowestPriority or: [ LMStackTally isJustWoken: preempted ] ]) ifFalse: [
 		busyTicks := busyTicks + 1.
 		busyTally addProcess: preempted ].
 	(self isUiStalledAt: Time millisecondClockValue) ifFalse: [ ^ self ].
