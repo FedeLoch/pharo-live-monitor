@@ -56,7 +56,10 @@ Class {
 		'lastDirectPaint',
 		'directPaintRect',
 		'directPaints',
-		'lastError'
+		'lastError',
+		'lastTick',
+		'starvedMs',
+		'starvedAt'
 	],
 	#classVars : [
 		'Default',
@@ -100,10 +103,11 @@ LiveMonitor class >> restartIfEnabled [
 
 { #category : #'system startup' }
 LiveMonitor class >> samplerPriority [
-	"Above the UI process (userSchedulingPriority) so a busy UI cannot starve us,
-	below the user interrupt watcher so cmd-. keeps working."
+	"As high as possible: above the UI, the event loop and anything user code forks, so nothing
+	but the VM timer can starve us. Each tick is a few microseconds, so this costs nothing to others.
+	Only code at the timer priority (valueUnpreemptively) or a blocking primitive/FFI call can stop us."
 
-	^ Processor userInterruptPriority - 1
+	^ Processor timingPriority - 1
 ]
 
 { #category : #'system startup' }
@@ -391,11 +395,52 @@ LiveMonitor >> paintDirectlyAt: now [
 	bounds := morph panelBounds.
 	osRenderer drawDuring: [ :canvas | painter draw: self on: canvas in: bounds ].
 	scale := renderer canvasScaleFactor.
-	osRenderer updateRectangle: ((bounds scaleBy: scale) expandBy: 1) rounded.
+	(self present: ((bounds scaleBy: scale) expandBy: 1) rounded on: osRenderer) ifFalse: [ ^ self ].
 	directPaintRect := directPaintRect
 		                   ifNil: [ bounds ]
 		                   ifNotNil: [ :rect | rect merge: bounds ].
 	directPaints := directPaints + 1
+]
+
+{ #category : #painting }
+LiveMonitor >> present: aRectangle on: osRenderer [
+	"Push aRectangle to the screen now. Never wait for the renderer lock (whoever holds it may be
+	the frozen process): if it is taken, answer false and we try again on a later tick.
+	Also present when the UI process froze in the middle of a frame (deferred updates)."
+
+	| mutex |
+	(osRenderer class allInstVarNames includesAll: #( 'mutex' 'deferUpdates' )) ifFalse: [
+		osRenderer updateRectangle: aRectangle.
+		^ true ].
+	mutex := osRenderer instVarNamed: 'mutex'.
+	^ mutex
+		  tryEnterCritical: [
+			  | deferred |
+			  deferred := osRenderer instVarNamed: 'deferUpdates'.
+			  osRenderer instVarNamed: 'deferUpdates' put: false.
+			  [ osRenderer updateRectangle: aRectangle ] ensure: [
+				  osRenderer instVarNamed: 'deferUpdates' put: deferred ].
+			  true ]
+		  ifLocked: [ false ]
+]
+
+{ #category : #sampling }
+LiveMonitor >> noteStarvationAt: now [
+	"Ticks come every tickMs. A much longer gap means nothing in the image could run, not even us:
+	code at the timer priority (valueUnpreemptively), a long primitive, a blocking FFI call or a long GC."
+
+	(lastTick notNil and: [ now - lastTick > 1000 ]) ifTrue: [
+		starvedMs := now - lastTick.
+		starvedAt := now ].
+	lastTick := now
+]
+
+{ #category : #accessing }
+LiveMonitor >> starvation [
+	"Answer how long the monitor itself could not run -> how many ms ago, or nil"
+
+	starvedAt ifNil: [ ^ nil ].
+	^ starvedMs -> (Time millisecondClockValue - starvedAt)
 ]
 
 { #category : #accessing }
@@ -546,6 +591,7 @@ LiveMonitor >> tick [
 
 	| start allocatedBefore now |
 	start := Time microsecondClockValue.
+	self noteStarvationAt: Time millisecondClockValue.
 	allocatedBefore := self allocatedBytes.
 	self sampleProcesses.
 	now := Time millisecondClockValue.

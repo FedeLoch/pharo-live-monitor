@@ -166,6 +166,11 @@ LMPanelPainter >> detailLinesFor: aMonitor [
 		(sample hotLabel notNil and: [ sample hotLabel ~= sample loopLabel ]) ifTrue: [
 			lines add: '  hot  ' , sample hotLabel , ' ' , (self class formatPercent: sample hotRatio)
 				-> self class text ] ].
+	aMonitor starvation ifNotNil: [ :starved |
+		starved value < 20000 ifTrue: [
+			lines add: 'whole image blocked ' , (self class formatMs: starved key) , ', '
+				, (self class formatMs: starved value) , ' ago' -> self class amber.
+			lines add: '  priority 80 code, a primitive, FFI or GC' -> self class dim ] ].
 	growth := aMonitor growth.
 	(growth notNil and: [ growth notEmpty and: [ aMonitor growthAge < 20000 ] ]) ifTrue: [
 		lines add: 'new instances (census)' -> self class pink.

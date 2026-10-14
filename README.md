@@ -22,6 +22,10 @@ That's it: the panel appears in the bottom-left corner and stays on, including a
 - Try it: `LMExamples allocationStorm` (freezes the UI for 8s).
 - `LiveMonitor stop` / `LiveMonitor start`, or *Debug ▸ Profiling ▸ Toggle Live Monitor*.
 
+## When can it stop?
+
+The sampler runs at priority 79, so busy UI code, code frozen mid-drawing, and processes you fork at any priority up to 79 can't stop it. Only code at priority 80 (`valueUnpreemptively`) or a long primitive, FFI call or GC blocks the whole VM. Afterwards the panel shows *whole image blocked 6.0s*. Tested on Pharo 13 and 14.
+
 ## Overhead
 
 About **1–2%** of CPU while idle. The panel shows its own live cost as `self x%`. In on/off benchmarks (Pharo 13, Apple Silicon, ~1s CPU-bound and allocation-heavy workloads), the difference stayed inside run-to-run noise (−7% to +6%). While the UI is frozen it does extra work (stack sampling, and an object census budgeted at about 3%), which is when you need it.

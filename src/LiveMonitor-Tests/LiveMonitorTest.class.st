@@ -165,6 +165,44 @@ LiveMonitorTest >> testSamplerProcessRunsAboveUserCode [
 ]
 
 { #category : #tests }
+LiveMonitorTest >> testSamplerSurvivesHighPriorityHog [
+	"Experiments forked above the UI (even at 75) must not starve the monitor"
+
+	| done before during |
+	monitor := LiveMonitor new.
+	monitor startSampling.
+	(Delay forMilliseconds: 600) wait.
+	before := monitor version.
+	done := Semaphore new.
+	[
+	| end |
+	end := Time millisecondClockValue + 1500.
+	[ Time millisecondClockValue < end ] whileTrue: [ OrderedCollection new add: 1 ].
+	during := monitor version.
+	done signal ] forkAt: 75.
+	done wait.
+	self assert: during - before >= 2.
+	self assert: monitor latest cpu > 0.5.
+	self assert: monitor lastError isNil
+]
+
+{ #category : #tests }
+LiveMonitorTest >> testStarvationIsReported [
+
+	| now |
+	now := Time millisecondClockValue.
+	monitor := LiveMonitor new.
+	self assert: monitor starvation isNil.
+	monitor noteStarvationAt: now - 4020.
+	monitor noteStarvationAt: now - 4000.
+	self assert: monitor starvation isNil.
+	monitor noteStarvationAt: now.
+	self assert: monitor starvation key equals: 4000.
+	self assert: ((monitor painter detailLinesFor: monitor) anySatisfy: [ :line |
+			 line key includesSubstring: 'blocked' ])
+]
+
+{ #category : #tests }
 LiveMonitorTest >> testTallyFindsTheLoop [
 
 	| tally spinner |
