@@ -381,6 +381,17 @@ LiveMonitor >> morph [
 ]
 
 { #category : #painting }
+LiveMonitor >> directPaintBoundsFor: panelBounds [
+	"While frozen, nobody repairs the screen around the panel. So never shrink: cover everything
+	painted during this freeze and where Morphic last drew the panel, otherwise the top of an
+	earlier, taller paint stays visible above the panel. Morphic repairs it all when the UI is back."
+
+	| painted |
+	painted := directPaintRect ifNil: [ morph ifNil: [ panelBounds ] ifNotNil: [ :panel | panel bounds ] ].
+	^ painted merge: panelBounds
+]
+
+{ #category : #painting }
 LiveMonitor >> paintDirectlyAt: now [
 	"The UI process is not answering, so Morphic will not draw. Paint the panel into the
 	OS window ourselves, the same way the world renderer shows its own profiling overlay."
@@ -392,13 +403,11 @@ LiveMonitor >> paintDirectlyAt: now [
 	renderer := world worldState worldRenderer.
 	(renderer respondsTo: #osWindowRenderer) ifFalse: [ ^ self ].
 	osRenderer := renderer osWindowRenderer ifNil: [ ^ self ].
-	bounds := morph panelBounds.
+	bounds := self directPaintBoundsFor: morph panelBounds.
 	osRenderer drawDuring: [ :canvas | painter draw: self on: canvas in: bounds ].
 	scale := renderer canvasScaleFactor.
 	(self present: ((bounds scaleBy: scale) expandBy: 1) rounded on: osRenderer) ifFalse: [ ^ self ].
-	directPaintRect := directPaintRect
-		                   ifNil: [ bounds ]
-		                   ifNotNil: [ :rect | rect merge: bounds ].
+	directPaintRect := bounds.
 	directPaints := directPaints + 1
 ]
 

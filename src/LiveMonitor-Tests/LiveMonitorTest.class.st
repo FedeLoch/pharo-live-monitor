@@ -42,6 +42,22 @@ LiveMonitorTest >> testCountObjects [
 ]
 
 { #category : #tests }
+LiveMonitorTest >> testDirectPaintNeverShrinksDuringAFreeze [
+	"Regression: a panel that got shorter during a freeze left the top of an older paint on screen"
+
+	| tall short |
+	monitor := LiveMonitor new.
+	tall := 10 @ 100 corner: 310 @ 400.
+	short := 10 @ 250 corner: 310 @ 400.
+	self assert: (monitor directPaintBoundsFor: tall) equals: tall.
+	monitor instVarNamed: 'directPaintRect' put: tall.
+	self assert: (monitor directPaintBoundsFor: short) equals: tall.
+	"once the UI is back and Morphic repaired the area, painting starts fresh"
+	monitor takeDirectPaintRect.
+	self assert: (monitor directPaintBoundsFor: short) equals: short
+]
+
+{ #category : #tests }
 LiveMonitorTest >> testFormatting [
 
 	self assert: (LMPanelPainter formatBytes: 512) equals: '512 B'.
