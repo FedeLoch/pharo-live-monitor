@@ -59,7 +59,8 @@ Class {
 		'lastError',
 		'lastTick',
 		'starvedMs',
-		'starvedAt'
+		'starvedAt',
+		'progressTracker'
 	],
 	#classVars : [
 		'Default',
@@ -200,6 +201,7 @@ LiveMonitor >> closeWindowAt: now [
 			loopLabel: busyTally loopLabel;
 			hotLabel: busyTally hotLabel;
 			hotRatio: busyTally hotRatio ].
+	sample progress: (self progressFor: sample stalled: stalled at: now).
 	self updateFreezeWith: sample stalled: stalled at: now.
 	history addLast: sample.
 	[ history size > historySize ] whileTrue: [ history removeFirst ].
@@ -331,6 +333,7 @@ LiveMonitor >> initialize [
 	lastDirectPaint := 0.
 	directPaints := 0.
 	uiTally := LMStackTally new.
+	progressTracker := LMProgressTracker new.
 	previousCounters := self readCounters.
 	self resetWindowAt: Time millisecondClockValue
 ]
@@ -474,6 +477,20 @@ LiveMonitor >> readCounters [
 		  (vm parameterAt: 10).
 		  (vm parameterAt: 7).
 		  (vm parameterAt: 8) }
+]
+
+{ #category : #sampling }
+LiveMonitor >> progressFor: aSample stalled: stalled at: now [
+	"Read how far the work is in its loops: the frozen UI process, or else the busy process"
+
+	| target |
+	target := stalled
+		          ifTrue: [ UIManager default uiProcess ]
+		          ifFalse: [ aSample isBusy ifTrue: [ busyTally busiestProcess ] ].
+	(target isNil or: [ target isTerminated ]) ifTrue: [
+		progressTracker reset.
+		^ nil ].
+	^ progressTracker update: target at: now
 ]
 
 { #category : #census }

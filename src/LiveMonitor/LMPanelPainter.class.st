@@ -67,6 +67,25 @@ LMPanelPainter class >> formatCount: aNumber [
 ]
 
 { #category : #formatting }
+LMPanelPainter class >> formatDuration: milliseconds [
+	"A duration that can be long: 42s, 3m12s, 1h05m"
+
+	| seconds |
+	seconds := (milliseconds / 1000) rounded.
+	seconds < 60 ifTrue: [ ^ seconds printString , 's' ].
+	seconds < 3600 ifTrue: [ ^ (seconds // 60) printString , 'm' , ((seconds \\ 60) printPaddedWith: $0 to: 2) , 's' ].
+	^ (seconds // 3600) printString , 'h' , ((seconds \\ 3600 // 60) printPaddedWith: $0 to: 2) , 'm'
+]
+
+{ #category : #formatting }
+LMPanelPainter class >> formatIteration: aNumber [
+	"Exact while it fits, so you can tell 999 from 1000"
+
+	aNumber < 100000 ifTrue: [ ^ aNumber rounded printString ].
+	^ self formatCount: aNumber
+]
+
+{ #category : #formatting }
 LMPanelPainter class >> formatMs: aNumber [
 
 	aNumber < 1000 ifTrue: [ ^ aNumber rounded printString , 'ms' ].
@@ -233,6 +252,16 @@ LMPanelPainter >> drawPanel: aMonitor status: status on: aCanvas in: bounds [
 	(self rowsFor: aMonitor) do: [ :row |
 		self drawRow: row history: aMonitor history on: aCanvas at: bounds left @ y.
 		y := y + lineHeight ].
+	aMonitor latest progress ifNotNil: [ :progress |
+		self drawProgress: progress on: aCanvas at: bounds left @ y.
+		y := y + lineHeight.
+		(self loopLinesFor: progress) do: [ :line |
+			aCanvas
+				drawString: (self clip: line from: self padding)
+				at: bounds left + self padding @ y
+				font: font
+				color: self class dim.
+			y := y + lineHeight ] ].
 	(self detailLinesFor: aMonitor) ifNotEmpty: [ :lines |
 		y := y + 3.
 		aCanvas
@@ -255,7 +284,30 @@ LMPanelPainter >> drawTab: aMonitor status: status on: aCanvas in: bounds [
 	x := bounds left + self tabPadding.
 	y := bounds top + self tabPadding.
 	self drawDot: status value on: aCanvas at: x @ y.
-	aCanvas drawString: (self tabTextFor: aMonitor) at: x + 11 @ y font: font color: self class text
+	aCanvas drawString: (self tabTextFor: aMonitor) at: x + 11 @ y font: font color: self class text.
+	aMonitor latest progress ifNotNil: [ :progress |
+		aCanvas
+			fillRectangle: (bounds left @ (bounds bottom - 2) extent: (bounds width * progress fraction) rounded @ 2)
+			color: self class green ]
+]
+
+{ #category : #drawing }
+LMPanelPainter >> drawProgress: aProgress on: aCanvas at: aPoint [
+	"The progress row: percentage and time left, and a bar where the other rows have a sparkline"
+
+	| x bar |
+	x := aPoint x + self padding.
+	aCanvas drawString: 'prog' at: x @ aPoint y font: font color: self class dim.
+	aCanvas
+		drawString: (self progressTextFor: aProgress)
+		at: x + (6 * charWidth) @ aPoint y
+		font: font
+		color: self class text.
+	bar := aPoint x + self width - self padding - self sparkWidth @ (aPoint y + 2) extent: self sparkWidth @ (lineHeight - 4).
+	aCanvas fillRectangle: bar color: (self class green alpha: 0.12).
+	aCanvas
+		fillRectangle: (bar origin extent: (bar width * aProgress fraction) rounded @ bar height)
+		color: (self class green alpha: 0.85)
 ]
 
 { #category : #drawing }
@@ -310,8 +362,24 @@ LMPanelPainter >> heightFor: aMonitor [
 	| lines |
 	(self showsTab: aMonitor) ifTrue: [ ^ self tabPadding * 2 + lineHeight ].
 	lines := 1 + (self rowsFor: aMonitor) size.
+	aMonitor latest progress ifNotNil: [ :progress | lines := lines + 1 + (self loopLinesFor: progress) size ].
 	(self detailLinesFor: aMonitor) ifNotEmpty: [ :details | lines := lines + details size ].
 	^ self padding * 2 + (lines * lineHeight) + 6
+]
+
+{ #category : #layout }
+LMPanelPainter >> loopLinesFor: aProgress [
+	"One line per loop under the progress bar, outermost first: where it is and which loop it is"
+
+	^ (aProgress loops first: (aProgress loops size min: self maxLoopLines)) collect: [ :loop |
+		  ((self class formatIteration: loop current) , '/' , (self class formatIteration: loop total) padLeftTo: 13)
+		  , '  ' , loop label ]
+]
+
+{ #category : #layout }
+LMPanelPainter >> maxLoopLines [
+
+	^ 3
 ]
 
 { #category : #layout }
@@ -371,6 +439,15 @@ LMPanelPainter >> initialize [
 LMPanelPainter >> padding [
 
 	^ 8
+]
+
+{ #category : #layout }
+LMPanelPainter >> progressTextFor: aProgress [
+
+	| text |
+	text := self class formatPercent: aProgress fraction.
+	aProgress etaMs ifNotNil: [ :eta | text := text , '  eta ' , (self class formatDuration: eta) ].
+	^ text
 ]
 
 { #category : #layout }
