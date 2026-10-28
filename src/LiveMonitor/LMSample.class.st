@@ -22,7 +22,8 @@ Class {
 		'busyProcess',
 		'loopLabel',
 		'hotLabel',
-		'hotRatio'
+		'hotRatio',
+		'progress'
 	],
 	#category : #LiveMonitor
 }
@@ -200,6 +201,19 @@ LMSample >> overhead [
 LMSample >> overhead: anObject [
 
 	overhead := anObject
+]
+
+{ #category : #accessing }
+LMSample >> progress [
+	"How far the busy process is in its loops, an LMProgress, or nil"
+
+	^ progress
+]
+
+{ #category : #accessing }
+LMSample >> progress: anObject [
+
+	progress := anObject
 ]
 
 { #category : #accessing }

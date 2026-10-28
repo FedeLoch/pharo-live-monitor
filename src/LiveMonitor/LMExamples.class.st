@@ -17,6 +17,15 @@ LMExamples class >> allocationStorm [
 ]
 
 { #category : #examples }
+LMExamples class >> longExperiment [
+	"Freeze the UI for about 10 seconds in nested loops, with no progress reporting at all:
+	the panel still shows how far it is and the time left"
+
+	<example>
+	self new runEpochs: 20
+]
+
+{ #category : #examples }
 LMExamples class >> busyBackgroundProcess [
 	"Spin a background process for 8 seconds: the UI keeps answering, the panel shows who is busy"
 
@@ -51,4 +60,18 @@ LMExamples >> spinFor: milliseconds [
 	sum := 0.
 	[ Time millisecondClockValue < end ] whileTrue: [ sum := sum + (sum \\ 7) + 1 ].
 	^ sum
+]
+
+{ #category : #examples }
+LMExamples >> runEpochs: epochs [
+
+	| samples |
+	samples := (1 to: 500) asArray.
+	1 to: epochs do: [ :epoch | samples do: [ :sample | self train: sample ] ]
+]
+
+{ #category : #examples }
+LMExamples >> train: aSample [
+
+	1 to: 1000 do: [ :step | 30 factorial ]
 ]

@@ -152,8 +152,8 @@ LMStackTally >> loopMethod [
 ]
 
 { #category : #accessing }
-LMStackTally >> processLabel [
-	"Name of the process seen most often"
+LMStackTally >> busiestProcess [
+	"The process seen most often"
 
 	| best bestCount |
 	bestCount := 0.
@@ -161,7 +161,15 @@ LMStackTally >> processLabel [
 		count > bestCount ifTrue: [
 			best := process.
 			bestCount := count ] ].
-	best ifNil: [ ^ nil ].
+	^ best
+]
+
+{ #category : #accessing }
+LMStackTally >> processLabel [
+	"Name of the process seen most often"
+
+	| best |
+	best := self busiestProcess ifNil: [ ^ nil ].
 	best == UIManager default uiProcess ifTrue: [ ^ 'UI' ].
 	^ best name ifNil: [ 'process' ]
 ]
