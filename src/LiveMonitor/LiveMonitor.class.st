@@ -418,9 +418,12 @@ LiveMonitor >> paintDirectlyAt: now [
 LiveMonitor >> present: aRectangle on: osRenderer [
 	"Push aRectangle (in pixels) to the screen now. Never wait for the renderer lock (whoever holds
 	it may be the frozen process): if it is taken, answer false and we try again on a later tick.
-	Also present when the UI process froze in the middle of a frame (deferred updates).
 	We use #updateAreas:immediate: like Morphic does: #updateRectangle: clips to the window size in
-	points, which drops everything below the top-left quarter on a HiDPI screen."
+	points, which drops everything below the top-left quarter on a HiDPI screen.
+	Never present only our rectangle: with a double-buffered GPU renderer (Metal on macOS) the rest
+	of the back buffer is undefined after a present, so the window turns black and blinks. Like
+	Morphic at the end of a frame, we upload our pixels to the texture with updates deferred, then
+	present the whole texture. That also works when the UI process froze in the middle of a frame."
 
 	| mutex |
 	(osRenderer class allInstVarNames includesAll: #( 'mutex' 'deferUpdates' )) ifFalse: [
@@ -431,9 +434,11 @@ LiveMonitor >> present: aRectangle on: osRenderer [
 		  tryEnterCritical: [
 			  | deferred |
 			  deferred := osRenderer instVarNamed: 'deferUpdates'.
-			  osRenderer instVarNamed: 'deferUpdates' put: false.
+			  osRenderer instVarNamed: 'deferUpdates' put: true.
 			  [ osRenderer updateAreas: { aRectangle } immediate: true ] ensure: [
 				  osRenderer instVarNamed: 'deferUpdates' put: deferred ].
+			  "The mutex is ours, and re-entrant: this does not wait"
+			  osRenderer useDeferredUpdates.
 			  true ]
 		  ifLocked: [ false ]
 ]

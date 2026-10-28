@@ -58,6 +58,24 @@ LiveMonitorTest >> testDirectPaintNeverShrinksDuringAFreeze [
 ]
 
 { #category : #tests }
+LiveMonitorTest >> testDirectPaintPresentsTheWholeWindow [
+	"Regression: presenting only the panel left the rest of the GPU back buffer undefined,
+	so the frozen window turned black and blinked"
+
+	| renderer holder |
+	monitor := LiveMonitor new.
+	renderer := LMFakeRenderer new.
+	self assert: (monitor present: (0 @ 0 extent: 300 @ 200) on: renderer).
+	self assert: renderer calls asArray equals: #( #upload #presentAll ).
+	self deny: (renderer instVarNamed: 'deferUpdates').
+	"whoever holds the renderer lock may be the frozen process: never wait for it"
+	renderer calls removeAll.
+	holder := [ renderer mutex critical: [ Semaphore new wait ] ] forkAt: Processor activePriority + 1.
+	[ self deny: (monitor present: (0 @ 0 extent: 300 @ 200) on: renderer) ] ensure: [ holder terminate ].
+	self assert: renderer calls isEmpty
+]
+
+{ #category : #tests }
 LiveMonitorTest >> testFormatting [
 
 	self assert: (LMPanelPainter formatBytes: 512) equals: '512 B'.
