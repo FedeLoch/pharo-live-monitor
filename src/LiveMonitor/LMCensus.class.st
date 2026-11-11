@@ -36,7 +36,7 @@ LMCensus >> cost [
 { #category : #accessing }
 LMCensus >> countOf: aClass [
 
-	^ counts at: aClass ifAbsent: [ 0 ]
+	^ counts occurrencesOf: aClass
 ]
 
 { #category : #comparing }
@@ -45,7 +45,7 @@ LMCensus >> growthSince: anOlderCensus [
 
 	| grown |
 	grown := OrderedCollection new.
-	counts keysAndValuesDo: [ :class :count |
+	counts doWithOccurrences: [ :class :count |
 		| delta |
 		delta := count - (anOlderCensus countOf: class).
 		delta > 0 ifTrue: [ grown add: class -> delta ] ].
@@ -57,12 +57,10 @@ LMCensus >> take [
 
 	| start object |
 	start := Time millisecondClockValue.
-	counts := IdentityDictionary new: 8192.
+	counts := Bag new: 8192.
 	object := Object someObject.
 	[ object == 0 ] whileFalse: [
-		| class |
-		class := object class.
-		counts at: class put: (counts at: class ifAbsent: [ 0 ]) + 1.
+		counts add: object class.
 		object := object nextObject ].
 	cost := Time millisecondClockValue - start
 ]
